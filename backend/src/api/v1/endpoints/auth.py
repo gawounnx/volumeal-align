@@ -234,3 +234,21 @@ async def logout(
         response.delete_cookie(key=key, path="/")
     for key in {settings.AUTH_REFRESH_COOKIE_NAME, "refresh_token"}:
         response.delete_cookie(key=key, path="/api/v1/auth")
+
+
+@router.get(
+    "/me",
+    response_model=UserResponse,
+    summary="현재 로그인한 사용자 정보 조회 (Section 8.1, 9.1)",
+)
+async def get_me(
+    current_user: Annotated[User, Depends(get_current_user)],
+) -> UserResponse:
+    # Ref: [Section 8.1, 9.1] 인증된 사용자의 프로필 DTO 반환
+    return UserResponse(
+        id=current_user.id,
+        email=current_user.email,
+        name=current_user.name,
+        role=current_user.role,
+        createdAt=current_user.created_at or datetime.now(timezone.utc),
+    )

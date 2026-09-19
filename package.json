@@ -6,6 +6,6 @@
     "build": "pnpm --filter @volumeal/contracts build && pnpm --filter frontend build"
   },
   "devDependencies": {
-    "next": "16.3.5"
+    "next": "^14.2.24"
   }
 }

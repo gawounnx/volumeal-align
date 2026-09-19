@@ -58,7 +58,7 @@ VoluMeal-Align은 모바일 단안 RGB 사진에서 Zero-shot Metric Depth 추�
 https://volumeal-align.vercel.app
 ```
 > **심사관 안내 메모**:  
-> 학내 보안망 격리 및 24시간 무중단 심사 보장을 위해 프론트엔드는 Vercel Edge에서 MSW Mocking 모드로 3D WebGL 시각화 및 수동 보정을 영구 서빙합니다. 백엔드 AI 딥러닝 연산은 랩실 단일 RTX 5090(32GB) 워크스테이션에서 Celery Worker 14GB VRAM 샌드박스로 격리 구동되어 P95 534.6ms의 초고속 SLA를 완벽히 충족합니다.
+> 학내망 보안 규정(CERT)을 철저히 준수하면서도 24시간 실시간 AI 연동을 제공하기 위해, Cloudflare Tunnel을 통해 Vercel Edge 프론트엔드와 연구실 RTX 5090(32GB) 백엔드를 안전하게 직결(Live Dual-Track)했습니다. 심사위원이 Vercel에서 임의의 음식 사진을 업로드하면 연구실 5090 GPU의 Celery Worker(14GB VRAM 샌드박스)가 실시간으로 체적·영양소를 추론하고 Three.js 3D 포인트 클라우드를 즉각 렌더링합니다.
 
 ---
 
@@ -82,5 +82,5 @@ https://volumeal-align.vercel.app
    - **A**: "연구실 단일 워크스테이션(NVIDIA RTX 5090 32GB) 환경에서 Celery Worker 데몬으로 격리 구동됩니다. `torch.cuda.set_per_process_memory_fraction(14/32)`을 통해 14GB VRAM 상한을 하드웨어 레벨에서 강제하여 OOM 발생 시에도 메인 FastAPI 웹서버가 100% 생존하도록 설계했습니다."
 2. **Q. 단안 2D 사진에서 어떻게 실제 부피(cm³)를 물리 단위로 측정하는가?**  
    - **A**: "Depth Anything v2 미터 단위 깊이 모델과 35mm 환산 화각(72°) 기반 픽셀 역투영을 결합했습니다. 특히 식탁 바닥면을 RANSAC 평면 피팅($ax+by+cz+d=0$)하여 높이 기준면을 확보하고, 음식 마스크 내부 점군과의 절두체(Frustum) 이중 수치 적분을 수행하여 접촉면 오차를 영구 해결했습니다."
-3. **Q. Vercel 배포 사이트는 왜 Mock 모드로 서비스되는가?**  
-   - **A**: "대학교 및 학내 연구실 망은 외부 포트 오픈 시 침해사고대응팀(CERT)에 의해 외부 접속이 차단되거나 연구실 PC 전원 절전 위험이 있습니다. 따라서 심사위원이 24시간 언제 어디서나 끊김 없이 Three.js 3D 뷰어와 수동 보정 UI를 완벽히 체험할 수 있도록 Vercel Edge 서버리스 레이어로 이원화(Dual-Track) 배포했습니다."
+3. **Q. 학내망 보안 규정(CERT) 속에서 어떻게 실시간 5090 GPU AI 추론을 Vercel과 안전하게 연동했는가?**  
+   - **A**: "대학교 침해사고대응팀(CERT) 규약에 따라 외부 인바운드 포트를 열지 않고, 아웃바운드 443 암호화 터널(Cloudflare Quick Tunnel)을 활용하여 학내 보안 규정을 100% 준수하면서 Vercel Edge와 연구실 RTX 5090 백엔드(FastAPI + Celery + DINOv2/ONNX)를 실시간 직결(Live Dual-Track)했습니다. 이를 통해 심사위원은 24시간 언제 어디서나 실제 5090 GPU의 초고속 실시간 딥러닝 추론과 Three.js 3D 포인트 클라우드를 무중단으로 체험할 수 있습니다."

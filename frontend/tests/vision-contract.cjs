@@ -44,6 +44,7 @@ function renderResult(result) {
     '../stores/useMealCorrectionStore': { correctFoodItemWeight: (item, weightG) => { const ratio = weightG / item.weightG; return { ...item, weightG, caloriesKcal: item.caloriesKcal * ratio, carbsG: item.carbsG * ratio, proteinG: item.proteinG * ratio, fatG: item.fatG * ratio, sodiumMg: item.sodiumMg * ratio }; } },
     '../utils/fileValidator': { validateImageFile: async () => ({ valid: true }) },
     '../components/modals/MealCorrectionModal': () => null,
+    '../components/ui/Toast': () => null,
   }, { Image: class {
     naturalWidth = 640; naturalHeight = 480;
     set src(value) { this.onload?.(); }

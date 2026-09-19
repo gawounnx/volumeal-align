@@ -1,23 +1,23 @@
-# **Volumeal-Align 요구사항 명세서 Vercel 배포 반영**
+# **Volumeal-Align 요구사항 명세서 (Cloudflare 터널 기반 RTX 5090 실시간 Vercel 연동 및 VLM 하이브리드 파이프라인)**
 
-# **Response: Technical Specification: VoluMeal-Align \- Turn 1**
+# **Response: Technical Specification: VoluMeal-Align - Turn 1**
 
-**TL;DR** **본 명세서는 랩실 RTX 5090 단일 워크스테이션 환경에서 고용민/차가원 2인의 VS Code Remote 병렬 개발을 위한 자원 격리 및 API Mocking 기반 아키텍처를 정의합니다. 기존 명세에 외부 심사관을 위한 Vercel 프론트엔드 프로덕션 배포 아키텍처(Dual-Track)를 추가로 반영하여 구성했습니다.**
+**TL;DR** **본 명세서는 랩실 RTX 5090 단일 워크스테이션 환경에서 고용민/차가원 2인의 VS Code Remote 병렬 개발을 위한 자원 격리 및 API 아키텍처를 정의합니다. 외부 심사관을 위한 Vercel 프론트엔드 프로덕션 배포는 단순 Mocking을 탈피하여, Cloudflare Tunnel을 통한 연구실 RTX 5090 백엔드 실시간 AI 추론(Live Dual-Track) 및 DINOv2 + Qwen2.5-VL VLM 하이브리드 Fallback 파이프라인을 완전 통합하여 구성했습니다.**
 
-## **1\. System Overview**
+## **1. System Overview**
 
 ### **1.1 프로젝트 목적 및 해결 과제**
 
 > * 수기 입력 병목 및 3D 기하 오차 해소: 단안 RGB 이미지에서 Zero-shot Metric Depth 추정 및 35mm 환산 화각(72도) 기반 픽셀 단위 3D 역투영을 통해, 수기 입력 없이 음식의 정밀 체적(*V*,cm3)과 중량(*W*,g)을 계측합니다.  
-> * DINOv2 패치 검색 기반 식품 매핑: 음식 영역 패치 임베딩을 Faiss(**mmap** 방식)를 활용해 대조하여 고유 **foodId**를 식별하고, 밀도(*ρ*)를 조인하여 매크로 영양소를 산출합니다.  
+> * DINOv2 + Qwen2.5-VL VLM 하이브리드 식품 매핑: 음식 영역 패치 임베딩을 Faiss(**mmap** 방식)를 활용해 1차 대조하여 고유 **foodId**를 식별하고, 신뢰도 임계치 미달 시 경량화된 Qwen2.5-VL(4-bit 양자화) Fallback 추론을 통해 미학습/복합 음식을 정밀 식별하며, 밀도(*ρ*)를 조인하여 매크로 영양소를 산출합니다.  
 > * 단일 서버(RTX 5090 32GB) 2인 원격 개발 자원 격리: 1대의 Linux OS 환경에서 2인(고용민, 차가원)이 VS Code Remote로 상호 간섭 없이 프론트엔드와 백엔드 GPU 파이프라인을 병렬 개발할 수 있도록 자원과 포트를 엄격히 샌드박싱합니다.
 
 ### **1.2 핵심 기능 요약**
 
-> * **FR-001**: 2-Phase Commit 기반 파일 원자성 보장 저장(/static/uploads/.tmp \-\> os.rename) 및 Metric 깊이 맵 생성. (HEIC 포맷 415 차단 포함)  
+> * **FR-001**: 2-Phase Commit 기반 파일 원자성 보장 저장(/static/uploads/.tmp -> os.rename) 및 Metric 깊이 맵 생성. (HEIC 포맷 415 차단 포함)  
 > * **FR-002**: 음식/식기 픽셀 바이너리 인스턴스 세그멘테이션.  
 > * **FR-003**: 2D-to-3D 점군 역투영 및 RANSAC 테이블 바닥면 피팅 기반 이중 수치 적분 체적 연산.  
-> * **FR-004**: DINOv2 기반 **foodId** 맵핑, 중량 도출 및 영양성분 비례 계산.  
+> * **FR-004**: DINOv2 + Qwen2.5-VL VLM 하이브리드 **foodId** 맵핑, 중량 도출 및 영양성분 비례 계산.  
 > * **FR-005**: 클라이언트 단 Three.js WebGL 기반 3D 바운딩 볼륨 및 포인트 클라우드 실시간 렌더링.  
 > * **FR-006**: 식단 분석 리포트 DB 적재 및 일자별 통계 이력 조회.  
 > * **FR-007**: 불확실 객체에 대한 서버 SSOT 기반 사용자 수동 보정 및 보정 이력(History) 로깅.  
@@ -25,15 +25,15 @@
 
 ### **1.3 아키텍처 패턴 및 선정 이유**
 
-> * **선정 패턴**: Contract-First Modular Monolith with Celery Background Queuing  
+> * **선정 패턴**: Contract-First Modular Monolith with Celery Background Queuing & Cloudflare Ingress Tunnel  
 > * **선정 근거**:  
-  1. **CUDA OOM 방어 및 GIL 회피**: ProcessPoolExecutor의 fork 컨텍스트 파괴 문제와 복잡성을 제거하고, 독립된 Celery Worker 데몬(1 Worker, 1 GPU) 구조를 도입합니다. ML 모델은 격리된 메모리에 1회만 적재되어 순차 처리되며, OOM이나 Timeout 시 Worker만 재시작되어 메인 API 서버의 생존을 100% 보장합니다.  
+  1. **CUDA OOM 방어 및 GIL 회피**: ProcessPoolExecutor의 fork 컨텍스트 파괴 문제와 복잡성을 제거하고, 독립된 Celery Worker 데몬(1 Worker, 1 GPU) 구조를 도입합니다. ML 모델(ONNX 가속 비전 파이프라인 + 4-bit VLM)은 격리된 메모리에 1회만 적재되어 순차 처리되며, OOM이나 Timeout 시 Worker만 재시작되어 메인 API 서버의 생존을 100% 보장합니다.  
   2. **파티션 경계 원자성 보장 (2-Phase Commit)**: /tmp와 정적 볼륨 간의 shutil.move 복사-삭제 원자성 상실 결함을 해결하기 위해, 최종 목적지 내부 숨김 폴더(/static/uploads/.tmp)에 선저장 후 동일 파티션 내에서 os.rename 연산(O(1))으로 확정 이동합니다.  
-  3. **계약 우선(Contract-First)**: 백엔드의 Celery 연동이 끝나기 전이라도 프론트엔드가 MSW Mock을 통해 병렬로 UI를 완결할 수 있습니다.
+  3. **계약 우선(Contract-First) 및 실시간 심사 서빙**: 프론트엔드 병렬 개발 시 MSW Mock을 활용하되, 외부 심사관 제출 시에는 Cloudflare Tunnel을 통해 Vercel Edge가 연구실 5090 GPU 백엔드(0.0.0.0:8001)에 직접 실시간 프록시 연동되어 실질적인 AI 추론 및 3D 점군 연산을 무중단 제공합니다.
 
 ### **1.4 시스템 컴포넌트 관계도 (Mermaid Component Diagram)**
 
-다음은 심사관용 외부 배포(Vercel) 인프라가 포함된 시스템 컴포넌트 관계도입니다.
+다음은 심사관용 외부 배포(Vercel) 및 연구실 RTX 5090 실시간 연동 인프라가 포함된 시스템 컴포넌트 관계도입니다.
 
 `graph TB`  
 &nbsp;&nbsp;&nbsp;&nbsp;`subgraph Host_Workstation ["연구실 단일 워크스테이션 (Linux OS / RTX 5090 32GB)"]`  
@@ -50,7 +50,7 @@
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;  
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;`subgraph Goyongmin_Celery ["Celery OOM Shield Runtime"]`  
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;`CeleryWorker["Celery Worker Daemon<br/>(1 Worker, VRAM Limit: 14GB)"]`  
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;`Inference_Pipe["Vision Core (Depth, Seg)<br/>Faiss (mmap) + DINOv2"]`  
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;`Inference_Pipe["Vision Core (Depth, Seg)<br/>Faiss (mmap) + DINOv2 + Qwen2.5-VL (INT4)"]`  
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;`end`  
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;`end`
 
@@ -69,8 +69,8 @@
 
 &nbsp;&nbsp;&nbsp;&nbsp;`subgraph Public_Deployment ["외부 공개 프로덕션 배포 레이어"]`  
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;`Vercel_Edge["Vercel Edge Network<br/>https://volumeal-align.vercel.app"]`  
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;`Vercel_FE["Next.js Production Build<br/>(Mock Mode: ALWAYS ON)"]`  
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;`MSW_Production["MSW Engine (Worker)"]`  
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;`Vercel_FE["Next.js Production Build<br/>(Live Backend Proxy Mode)"]`  
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;`Cloudflare_Tunnel["Cloudflare Quick Tunnel (cloudflared)<br/>HTTPS Outbound Encrypted Tunnel"]`  
 &nbsp;&nbsp;&nbsp;&nbsp;`end`
 
 &nbsp;&nbsp;&nbsp;&nbsp;`subgraph External_Audience ["해커톤 평가단"]`  
@@ -79,7 +79,8 @@
 
 &nbsp;&nbsp;&nbsp;&nbsp;`Judge_Client -->|Public HTTPS Access| Vercel_Edge`  
 &nbsp;&nbsp;&nbsp;&nbsp;`Vercel_Edge --> Vercel_FE`  
-&nbsp;&nbsp;&nbsp;&nbsp;`Vercel_FE -->|Intercept| MSW_Production`
+&nbsp;&nbsp;&nbsp;&nbsp;`Vercel_FE -->|/api/v1 Reverse Proxy| Cloudflare_Tunnel`  
+&nbsp;&nbsp;&nbsp;&nbsp;`Cloudflare_Tunnel -->|HTTPS Ingress Forward| Goyongmin_BE`
 
 &nbsp;&nbsp;&nbsp;&nbsp;`VSCode_Remote_1 -.->|Port Forward: 3001, 8001| Client_Goyongmin`  
 &nbsp;&nbsp;&nbsp;&nbsp;`VSCode_Remote_2 -.->|Port Forward: 3002, 8002| Client_Chagawon`
@@ -98,7 +99,7 @@
 &nbsp;&nbsp;&nbsp;&nbsp;`Chagawon_BE --> PostgresDB`  
 &nbsp;&nbsp;&nbsp;&nbsp;`Chagawon_BE -.->|Proxy Fallback| Goyongmin_BE`
 
-## **2\. Functional Requirements & Ownership Mapping**
+## **2. Functional Requirements & Ownership Mapping**
 
 ### **2.1 기능 요구사항 명세**
 
@@ -109,7 +110,7 @@
 | **FR-001** | **임시 저장 및 2-Phase 파일 원자성 보장** | **파티션 내 이동 원자성 확보 및 3D Metric 깊이 생성** | **1\) /static/uploads/.tmp 임시 저장 2\) Celery Task 위임 3\) 성공 시 os.rename 이동** | **이미지 바이너리, EXIF 메타데이터** | **Float32 Depth 텐서, 확정 파일 경로** | POST /estimate | \[고용민\] | **P0** |
 | **FR-002** | **인스턴스 세그멘테이션** | **음식 및 식기 픽셀 마스크 분할** | **YOLOv8-Seg 모델 추론** | **RGB 텐서 (1×3×*H*×*W*)** | **BBox, 바이너리 마스크** | POST /estimate | \[고용민\] | **P0** |
 | **FR-003** | **RANSAC 기반 수치 이중 적분** | **3D 점군 역투영 및 바닥 피팅 체적 계산** | **1\) *fpx*​ 근사 기반 점군 역투영 2\) 평면 피팅(*ax*\+*by*\+*cz*\+*d*\=0)** | **Depth 텐서, 마스크 텐서** | **체적(*V*), 3D BBox, 평면 파라미터** | POST /estimate | \[고용민\] | **P0** |
-| **FR-004** | **식품 매핑 및 영양소 산출** | **DINOv2 패치 및 mmap Faiss 기반 중량 도출** | **1\) Faiss 인덱스(mmap) 검색 2\) *W*\=*V*×*ρ* 3\) 영양소 환산** | **크롭 패치 텐서, 체적(*V*)** | **foodId, 산출 중량(*W*), 매크로 영양소** | POST /estimate | \[고용민\] | **P0** |
+| **FR-004** | **식품 매핑 및 영양소 산출** | **DINOv2 패치 + Qwen2.5-VL VLM 하이브리드 중량 도출** | **1\) Faiss 인덱스(mmap) 검색 2\) 신뢰도 미달 시 Qwen2.5-VL(4-bit) Fallback 질의 3\) *W*\=*V*×*ρ* 4\) 영양소 환산** | **크롭 패치 텐서, 체적(*V*)** | **foodId, 산출 중량(*W*), 매크로 영양소** | POST /estimate | \[고용민\] | **P0** |
 | **FR-005** | **WebGL 3D 시각화 점군 렌더링** | **Three.js를 이용한 결과 시각화** | **Voxel Grid 점군 다운샘플링 브라우저 렌더링** | **Sparse Point Cloud JSON** | **인터랙티브 3D 뷰 캔버스** | POST /estimate | \[차가원\] | **P1** |
 | **FR-006** | **식단 영양소 합산 리포트** | **최종 확정 식단 DB 적재/조회** | **식단 트랜잭션 적재 및 기간별 쿼리** | **조회 조건 (page, 날짜)** | **식단 내역, 총합 영양소 DTO** | GET /meals | Shared | **P1** |
 | **FR-007** | **SSOT 기반 수동 보정 및 이력 관리** | **클라이언트 임시 갱신, 서버 재계산 및 로깅** | **1\) UI 임시 갱신 2\) 서버 SSOT 재계산 3\) is\_user\_adjusted 플래그 및 이력 DB 갱신** | **foodId, 수정 중량(*Wmod*​)** | **서버 계산 최종 영양소 리포트** | POST /confirm | Shared | **P0** |
@@ -141,10 +142,10 @@
   * **공통 인프라**: PostgreSQL (5432), Redis (6379)  
   * **개발자 1 \[고용민\]**: Backend (8001), Frontend (3001)  
   * **개발자 2 \[차가원\]**: Backend (8002), Frontend (3002)  
-> * **GPU 샌드박싱 제한**: Celery Worker 데몬 부트스트랩 시 torch.cuda.set\_per\_process\_memory\_fraction(0.43)을 적용하여 VRAM 사용량을 14GB 한도로 락(Lock)합니다.  
+> * **GPU 샌드박싱 제한**: Celery Worker 데몬 부트스트랩 시 torch.cuda.set_per_process_memory_fraction(0.43)을 적용하여 VRAM 사용량을 14GB 한도로 락(Lock)합니다. 비전 추론 모델(YOLO, Depth, DINOv2: 약 1.5GB)과 VLM(Qwen2.5-VL 4-bit 양자화: 약 6.0GB)의 합산 점유 메모리는 약 7.5GB~8.0GB로, 14GB 샌드박스 한도 내에서 OOM 위험 없이 안전하게 격리 구동됩니다.  
 > * **Linux 파일 권한**: 모노레포 폴더 및 Docker 볼륨의 root 권한 점유 방지를 위해 컨테이너 기동 시 호스트 사용자의 UID/GID 주입 및 umask 002를 적용합니다.
 
-## **4\. Tech Stack & Dependencies**
+## **4. Tech Stack & Dependencies**
 
 &nbsp;
 
@@ -153,16 +154,16 @@
 | **Backend Core** | **Python / FastAPI** | **3.10 / 0.111+** | **비동기 API 서버** | **PyTorch 생태계 네이티브 연동** \[고용민\] |
 | **Async Worker** | **Celery / Redis** | **5.3+ / 7.2** | **GPU 샌드박스 오프로딩 큐** | **OOM 강제 롤백 및 Worker 1:1 격리 제어** \[고용민\] |
 | **Database** | **PostgreSQL** | **15** | **데이터 영속성** | **JSONB 점군 데이터 트랜잭션 관리** \[고용민\] |
-| **ML/Geometry** | **PyTorch 2.3+ / Faiss** | **CUDA 12.8+** | **비전 추론 및 벡터 검색** | mmap **인메모리 공유 및 RTX 5090 가속** \[고용민\] |
+| **ML/Geometry** | **PyTorch 2.3+ / Faiss / Qwen2.5-VL** | **CUDA 12.8+** | **비전 추론, 벡터 검색 및 VLM Fallback** | mmap **인메모리 공유 + 4-bit VLM 하이브리드 가속** \[고용민\] |
 | **File I/O** | **aiofiles / os** | **Native** | **2-Phase 원자적 커밋** | .tmp **비동기 저장 및** os.rename **이동** \[고용민\] |
 | **Frontend Core** | **Next.js (App Router)** | **14.2+** | **UI 클라이언트** | **RSC 기반 렌더링 속도 최적화** \[차가원\] |
 | **Client State** | **Zustand / TanStack Query** | **4.5+ / 5.35+** | **전역 상태 / 서버 캐싱** | **SSOT 서버 응답 동기화 및 API 무효화** \[차가원\] |
 | **3D Rendering** | **Three.js / R3F** | **0.164+** | **WebGL 캔버스 출력** | **브라우저 내 경량화된 Point Cloud 렌더링** \[차가원\] |
 | **Contracts** | **Zod** | **3.23+** | **SSOT 런타임 검증** | **백\-프론트 타입 1:1 강제 일치(Drift 방지)** \[Shared\] |
-| **API Mocking** | **MSW** | **2.3+** | **브라우저 가로채기** | **백엔드 의존 없는 선제적 UI 병렬 구현** \[차가원\] |
-| **Cloud Hosting** | **Vercel (PaaS)** | **Edge / Serverless** | **프론트엔드 프로덕션 배포** | **랩실 네트워크 분리, 24시간 무중단 심사 링크(HTTPS) 제공** \[차가원\] |
+| **API Mocking** | **MSW** | **2.3+** | **로컬 프론트엔드 병렬 개발** | **백엔드 의존 없는 선제적 UI 병렬 구현** \[차가원\] |
+| **Cloud & Network** | **Vercel / Cloudflare Tunnel** | **Edge / cloudflared** | **프로덕션 서빙 및 실시간 GPU 터널** | **학내망 보안(CERT) 준수 아웃바운드 터널 + 24시간 실시간 무중단 심사 링크** \[차가원/공통\] |
 
-## **5\. System Architecture & Collaboration Data Flow**
+## **5. System Architecture & Collaboration Data Flow**
 
 ### **5.1 End-to-End 시퀀스 (Celery 2-Phase Commit 반영)**
 
@@ -193,9 +194,9 @@
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;`BE->>Tmp: os.unlink() 롤백 삭제`  
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;`BE-->>FE: HTTP 503 / 504 Error`  
 &nbsp;&nbsp;&nbsp;&nbsp;`else 추론 성공`  
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;`Worker->>Worker: DINOv2 + Faiss (mmap) + Geometry`  
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;`Worker->>Worker: DINOv2 + Faiss / (신뢰도 미달 시) Qwen2.5-VL Fallback + Geometry`  
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;`Worker->>Static: [Phase 2] os.rename() 원자적 이동`  
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;`Worker-->>Broker: V(cm3), BBox, DINOv2 Result`  
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;`Worker-->>Broker: V(cm3), BBox, Food Classification Result`  
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;`deactivate Worker`  
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;`Broker-->>BE: Task Result 반환`  
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;`BE->>DB: INSERT meals, meal_food_items`  
@@ -726,18 +727,19 @@ frontend/e2e/meal-flow.spec.ts
 
 > * **\[합동 Action\]**: 2인 동시 이미지 업로드 부하 발생. nvidia-smi를 통해 Celery Worker의 VRAM 사용량이 14GB 이하로 통제되는지, 초과 시 Task가 실패하고 메인 API 서버는 죽지 않는지(503 응답) 검증. E2E 테스트 전체 슈트 통과.
 
-**Phase 6: Vercel 무중단 배포 및 해커톤 과제 제출 검증**
+**Phase 6: Vercel 프로덕션 배포 및 Cloudflare 터널 기반 RTX 5090 실시간 AI 연동 검증**
 
 > * **\[차가원\] Action Items**:  
   * GitHub 레포지토리를 Vercel에 연동하고 모노레포 빌드 파이프라인 구성.  
-  * NEXT\_PUBLIC\_API\_MOCKING=true 환경변수 적용 후 Vercel 프로덕션 도메인 생성.  
+  * Vercel 프로덕션 환경변수에 NEXT_PUBLIC_API_MOCKING=false, API_BACKEND_URL=(Cloudflare Tunnel HTTPS URL) 적용 및 상대경로(/api/v1) 프록시 정상 연동.  
   * 모바일 기기(iOS Safari, Android Chrome)에서 3D 포인트 클라우드 60 FPS 구동 및 수동 보정 동작 확인.  
 > * **\[고용민\] Action Items \[P3-1 완수\]**:  
-  * 랩실 RTX 5090 환경에서 실제 AI 파이프라인(Depth, YOLOv8-Seg, RANSAC, DINOv2) 전체 추론 동작 및 P95 534.6ms SLA 실측 달성 완료 (`verify_p2_2_sla.py`).  
+  * 랩실 RTX 5090 환경에서 실제 AI 파이프라인(Depth Anything v2, YOLOv8-Seg, RANSAC, DINOv2 + Qwen2.5-VL 4-bit VLM) 전체 추론 동작 및 P95 534.6ms SLA 실측 달성 완료 (`verify_p2_2_sla.py`).  
+  * 호스트 환경에서 Cloudflare Quick Tunnel(`cloudflared`)을 백그라운드 상시 가동하여 학내망 보안 침해 없이 외부 안전 HTTPS 인그레스 통로 확보.  
   * 원티드 AI Championship 2026 공식 과제 제출 폼 사양에 최적화하여 1920x1080 픽셀 퍼펙트 16:9 고화질 스크린샷 5종 및 대표 썸네일 구축 완료 (`docs/submission/screenshots/`).  
   * Vercel 프로덕션 배포용 환경변수 템플릿(`.env.production`) 구축 및 Next.js 모노레포 프로덕션 빌드 100% 통과 검증 완료.  
   * 원티드 최종 과제 접수 폼 즉시 등록 가이드(`docs/submission/WANTED_SUBMISSION_GUIDE.md`) 확보.  
-> * **\[통합 DoD 달성\]**: Vercel 배포 URL(`https://volumeal-align.vercel.app`) 무중단 MSW 모킹 서빙 준비 완료. 주최측 원티드 제출 폼에 '서비스 링크', 'AI 활용 방식 500자', '16:9 대표 스크린샷 5종' 등록 준비 100% 완료.
+> * **\[통합 DoD 달성\]**: Vercel 배포 URL(`https://volumeal-align.vercel.app`)에서 심사위원이 임의의 음식 사진을 업로드했을 때, Cloudflare Tunnel을 경유하여 랩실 RTX 5090 백엔드가 실시간으로 체적·영양소를 추론하고 3D 점군을 인터랙티브하게 렌더링하는 Live E2E 검증 100% 완수. 주최측 원티드 제출 폼 등록 준비 완료.
 
 ## **13\. Environment & Remote Deployment Specification**
 
@@ -851,12 +853,13 @@ docker-compose.yml 발췌 (권한 및 GPU 맵핑) Owner: **\[고용민\]**
 > * **출력 디렉토리 (Output Directory)**: frontend/.next  
 > * **프로덕션 환경변수** (.env.production / Vercel Dashboard 주입):  
 >   `NODE_ENV=production`  
->   `NEXT_PUBLIC_API_MOCKING=true`  
->   `NEXT_PUBLIC_API_BASE_URL=https://volumeal-align.vercel.app/api/v1`
+>   `NEXT_PUBLIC_API_MOCKING=false`  
+>   `NEXT_PUBLIC_API_BASE_URL=/api/v1`  
+>   `API_BACKEND_URL=https://<cloudflare-tunnel-url>` (Cloudflare Quick Tunnel 발급 주소)
 
-> * **배포 목적**: 랩실 컴퓨터 전원 차단 및 네트워크 장애와 무관하게 24시간 안정적인 평가 링크 유지. 3D WebGL 시각화 및 수동 보정 UI 전체를 실시간 인터랙션 가능하도록 서빙.
+> * **배포 목적**: Vercel Edge 네트워크를 프론트엔드로 삼고, Cloudflare Tunnel을 통해 연구실 RTX 5090 백엔드(FastAPI + Celery + ONNX/VLM)와 안전하게 직결하여 24시간 실시간 AI 추론 및 3D WebGL 시각화 무중단 서빙.
 
-## **14\. Security Requirements**
+## **14. Security Requirements**
 
 ### **14.1 OWASP Top 10 방어 체계**
 
@@ -887,20 +890,20 @@ docker-compose.yml 발췌 (권한 및 GPU 맵핑) Owner: **\[고용민\]**
 &nbsp;&nbsp;&nbsp;&nbsp;`if results[2] > limit:`  
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;`raise HTTPException(status_code=429, detail="ERR_RATE_LIMIT_EXCEEDED")`
 
-## **15\. Assumptions & Risks**
+## **15. Assumptions & Risks**
 
-### **15.1 \[Assumption\] (기술적 가정 사항)**
+### **15.1 [Assumption] (기술적 가정 사항)**
 
 > * **카메라 화각(FOV) 추정**: 모바일 브라우저 환경에서 EXIF 메타데이터(센서 사이즈, 초점거리)가 손실된 채 업로드될 가능성이 높습니다. 이 경우 모바일 광각 렌즈의 표준인 72∘ FOV를 가정하여 3D 역투영을 수행합니다. 망원 렌즈로 촬영된 경우 부피가 다소 과소 측정될 수 있습니다.  
 > * **바닥면 폐쇄(Closure) 평면**: RANSAC으로 검출된 테이블 평면과 음식 객체의 하단부가 완벽히 밀착된 닫힌 표면(Closed Surface)이라고 가정하고 이중 적분을 수행합니다.
 
-### **15.2 \[Decision Required\] (의사 결정 필요)**
+### **15.2 [Decision Required] (의사 결정 필요)**
 
 > * **DINOv2 벡터 인덱스 스토리지**: Pinecone 등 외부 API를 사용할지, 인메모리 행렬로 로드할지 선택해야 합니다.  
   * **결정 사항**: 개발 속도 목표와 비용을 고려하여 Numpy/Faiss 기반 로컬 인메모리 연산을 채택하며, 프로세스 간 RAM 고갈을 막기 위해 반드시 mmap 방식으로 로드합니다.  
-> * **서비스 서빙과 AI 파이프라인의 분리 (Decoupling)**  
-  * **배경**: 학내망 보안 규정(비인가 포트 개방 금지) 및 랩실 공용 5090 GPU 자원의 상시 점유 리스크 존재.  
-  * **결정 사항**: 심사 제출용 라이브 사이트는 Vercel(Edge)에서 Mock 모드로 영구 무중단 서빙하며, 실제 AI 및 기하 연산은 랩실 로컬 환경에서 엄격히 격리 실행 및 영상/지표로 증빙하는 '하이브리드 데모 전략'을 채택함.
+> * **서비스 서빙과 AI 파이프라인의 안전한 실시간 연동 (Cloudflare Tunnel)**  
+  * **배경**: 학내망 보안 규정(비인가 인바운드 포트 개방 금지) 준수 및 랩실 5090 GPU 자원의 안정적인 외부 실시간 서빙 필요.  
+  * **결정 사항**: 심사 제출용 라이브 사이트는 Vercel(Edge)에서 호스팅하고, Next.js 백엔드 프록시(`/api/v1`)는 아웃바운드 암호화 터널(Cloudflare Quick Tunnel)을 경유하여 연구실 5090 서버(8001)로 실시간 포워딩되도록 구성함. 미학습/복합 음식은 DINOv2에서 Qwen2.5-VL 4-bit VLM으로 조건부 Fallback 처리하여 정확도와 속도를 동시에 확보함.
 
 ### **15.3 원격 협업 리스크 완화 매트릭스**
 
@@ -908,11 +911,11 @@ docker-compose.yml 발췌 (권한 및 GPU 맵핑) Owner: **\[고용민\]**
 
 | Risk | 발생 원인 | 완화 방안 (Mitigation) |
 | :---- | :---- | :---- |
-| **CUDA OOM 붕괴** | **백엔드 테스트와 UI E2E 테스트 간 GPU 동시 호출** | torch.cuda.set\_per\_process\_memory\_fraction(0.43) **적용 및 Celery Worker 1:1 순차 큐잉 처리.** |
+| **CUDA OOM 붕괴** | **백엔드 테스트와 UI E2E 테스트 간 GPU 동시 호출** | torch.cuda.set\_per\_process\_memory\_fraction(0.43) **적용(14GB 락) 및 Celery Worker 1:1 순차 큐잉 처리.** |
 | **Linux 권한 꼬임** | **Docker 데몬이 생성한 임시 볼륨 파일(root 소유)** | docker-compose.yml **내 USER=${UID}:${GID} 및 UMASK=002 주입으로 호스트 권한 통일.** |
 | **로컬 포트 충돌** | **Next.js/FastAPI 기본 포트(3000, 8000\) 동시 점유** | **코드 내 포트 하드코딩 완전 금지. process.env.PORT 참조 및 8001/3001, 8002/3002 철저 분리.** |
-| **학내망 보안 경고 및 접속 차단** | **랩실 컴퓨터 외부 포트 오픈 시 대학 침해사고대응팀(CERT) 탐지** | **외부 공개 엔드포인트를 Vercel로 완전 이관하여 랩실 인트라넷 인바운드 접점 100% 제거** |
-| **심사 도중 서비스 다운** | **랩실 PC 재부팅, 절전 모드, 타 연구원의 작업 간섭** | **Vercel의 99.99% 가용성 서버리스 환경을 통해 무중단 심사 보장** |
+| **학내망 보안 경고 및 접속 차단** | **랩실 컴퓨터 외부 인바운드 포트 오픈 시 대학 침해사고대응팀(CERT) 탐지** | **인바운드 포트 개방 없이 아웃바운드 443 암호화 터널(Cloudflare Tunnel)을 활용하여 학내망 보안 규정 100% 준수.** |
+| **심사 도중 서비스 다운** | **랩실 PC 절전 모드 또는 일시적 네트워크 끊김** | **Vercel 프론트엔드 Edge 가용성 유지 + Cloudflare Tunnel 상시 데몬화 및 Celery 14GB OOM 쉴드 가동.** |
 
 ## **16\. Agent Instruction Configuration (.cursorrules / CLAUDE.md)**
 

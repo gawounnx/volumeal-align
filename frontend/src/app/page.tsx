@@ -3,11 +3,12 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import dynamic from 'next/dynamic';
 import MealHistory from '../components/MealHistory';
-import { estimateMealVision, confirmMealVision, login, register, logout, getServiceStatus, AuthenticationError } from '../services/api';
+import { estimateMealVision, confirmMealVision, login, register, logout, getServiceStatus, AuthenticationError, listMeals } from '../services/api';
 import type { FoodCandidate, FoodItemEstimation, MealEstimateResponse } from '../types/vision';
 import { correctFoodItemWeight } from '../stores/useMealCorrectionStore';
 import { validateImageFile } from '../utils/fileValidator';
 import MealCorrectionModal from '../components/modals/MealCorrectionModal';
+import Toast from '../components/ui/Toast';
 
 const EMPTY_ITEMS: MealEstimateResponse['foodItems'] = [];
 const NUTRIENT_KEYS = ['caloriesKcal', 'carbsG', 'proteinG', 'fatG', 'sodiumMg'] as const;
@@ -55,6 +56,7 @@ export default function MealAnalysisPage() {
   const [loading, setLoading] = useState<boolean>(false);
   const [result, setResult] = useState<MealEstimateResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [unmatchedItemIds, setUnmatchedItemIds] = useState<Set<string>>(new Set());
   const [saving, setSaving] = useState(false);
   const [correctionItemId, setCorrectionItemId] = useState<string | null>(null);
@@ -71,6 +73,7 @@ export default function MealAnalysisPage() {
     let active = true;
     getServiceStatus().then(status => { if (active) setServiceStatus(status); })
       .catch(() => { if (active) setServiceStatus('서버 연결 확인 필요'); });
+    listMeals().then(() => { if (active) setSignedIn(true); }).catch(() => { /* not authenticated yet */ });
     return () => { active = false; };
   }, []);
   const handleSessionExpired = useCallback(() => { logout(); setSignedIn(false); setResult(null); setError('로그인이 만료되었습니다. 다시 로그인해 주세요.'); }, []);
@@ -78,7 +81,15 @@ export default function MealAnalysisPage() {
     event.preventDefault();
     setAuthLoading(true); setError(null);
     try { await login(email, password); setSignedIn(true); setPassword(''); }
-    catch (err) { setError(err instanceof Error ? err.message : '로그인 실패'); }
+    catch (err) {
+      const msg = err instanceof Error ? err.message : '로그인 실패';
+      if (msg.includes('ALREADY_AUTHENTICATED') || msg.includes('403')) {
+        setSignedIn(true);
+        setPassword('');
+      } else {
+        setError(msg);
+      }
+    }
     finally { setAuthLoading(false); }
   };
   const handleRegister = async (event: React.FormEvent) => {
@@ -107,6 +118,7 @@ export default function MealAnalysisPage() {
         setFile(null); setPreviewUrl(null); setResult(null);
         e.target.value = '';
         setError(validation.message);
+        setToastMessage(validation.message);
         return;
       }
     }
@@ -224,7 +236,8 @@ export default function MealAnalysisPage() {
   }, [previewUrl, result]);
 
   return (
-    <main className="min-h-screen bg-slate-950 text-slate-100 p-6 md:p-10 font-sans">
+    <main className="min-h-screen bg-slate-950 text-slate-100 p-4 sm:p-6 md:p-10 font-sans relative">
+      <Toast message={toastMessage} onClose={() => setToastMessage(null)} />
       <header className="max-w-7xl mx-auto mb-8 border-b border-slate-800 pb-5 flex flex-wrap gap-3 justify-between items-center">
         <div>
           <h1 className="text-2xl md:text-3xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-teal-300">
@@ -396,7 +409,7 @@ export default function MealAnalysisPage() {
                       />
                       <span className="text-base font-bold text-emerald-400"> g</span>
                     </label>
-                    <button type="button" disabled={saving} onClick={() => setCorrectionItemId(item.id)} className="mt-1 text-xs text-cyan-300 underline">보정 모달 열기</button>
+                    <button type="button" data-testid="open-correction-modal-btn" disabled={saving} onClick={() => setCorrectionItemId(item.id)} className="mt-1 text-xs text-cyan-300 underline">보정 모달 열기</button>
                   </div>
                   <div className="bg-slate-900 border border-slate-800 p-3.5 rounded-xl">
                     <span className="text-[11px] text-slate-400 uppercase">추정 열량</span>

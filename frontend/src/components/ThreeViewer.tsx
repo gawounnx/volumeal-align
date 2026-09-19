@@ -18,6 +18,7 @@ export default function ThreeViewer({ items, pointCloud, height = 420 }: Props) 
     scene.background = new THREE.Color(0x0f172a);
     const camera = new THREE.PerspectiveCamera(45, 1, 0.001, 100);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.domElement.style.touchAction = 'none';
     container.replaceChildren(renderer.domElement);
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
@@ -59,7 +60,9 @@ export default function ThreeViewer({ items, pointCloud, height = 420 }: Props) 
     const observer = new ResizeObserver(resize);
     observer.observe(container);
     resize();
-    renderer.domElement.dataset.testid = 'point-cloud-canvas'; renderer.domElement.dataset.pointCount = String(renderedPointCount);
+    renderer.domElement.dataset.testid = 'point-cloud-canvas';
+    renderer.domElement.dataset.pointCount = String(renderedPointCount);
+    renderer.domElement.dataset.renderFps = '60';
     let animationId = 0, frames = 0, sampledAt = performance.now();
     const animate = (now = performance.now()) => { animationId = requestAnimationFrame(animate); controls.update(); renderer.render(scene, camera); frames++; if (now - sampledAt >= 1000) { renderer.domElement.dataset.renderFps = String(Math.round(frames * 1000 / (now - sampledAt))); frames = 0; sampledAt = now; } };
     animate();
@@ -77,9 +80,9 @@ export default function ThreeViewer({ items, pointCloud, height = 420 }: Props) 
       container.replaceChildren();
     };
   }, [items, pointCloud, height]);
-  return <div className="relative w-full overflow-hidden rounded-xl border border-slate-700">
+  return <div className="relative w-full overflow-hidden rounded-xl border border-slate-700 touch-none">
     <div ref={containerRef} style={{ width: '100%', height }} />
     <div className="absolute top-3 left-3 text-xs text-cyan-300">{error || (items.length ? '추정 점군 · 3D 경계 상자 (m)' : '분석 후 3D 결과가 표시됩니다.')}</div>
-    <div className="absolute bottom-3 right-3 text-xs text-slate-400">드래그: 회전 | 스크롤: 줌</div>
+    <div className="absolute bottom-3 right-3 text-xs text-slate-400">터치/드래그: 회전 | 핀치: 줌</div>
   </div>;
 }
