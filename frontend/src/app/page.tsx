@@ -244,7 +244,7 @@ export default function MealAnalysisPage() {
             VoluMeal-Align
           </h1>
           <p className="text-sm text-slate-400 mt-1">
-            식단 체적·영양 추정 및 등록된 복약 정보 기반 상호작용 확인
+            식단 체적·영양 추정 및 3D AI 정밀 분석
           </p>
         </div>
         <span className="bg-emerald-950 text-emerald-400 text-xs px-3 py-1 rounded-full border border-emerald-700 font-mono">
@@ -294,51 +294,6 @@ export default function MealAnalysisPage() {
             </button>
             {error && <p role="alert" className="text-xs text-rose-400 mt-2">{error}</p>}
           </div>
-
-          {/* KFDA 의약품 상호작용 경고창 */}
-          {result && (
-            <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-lg">
-              <h2 className="text-sm font-semibold text-slate-300 uppercase tracking-wider mb-3 flex items-center gap-2">
-                <span>등록 복약과 식품 상호작용</span>
-                <span className="text-xs bg-slate-800 px-2 py-0.5 rounded text-slate-400 font-mono">
-                  {result.drugWarnings.length}건
-                </span>
-              </h2>
-
-              {!result.isPersisted ? (
-                <p className="text-xs text-amber-300">후보 선택·중량 보정 후 저장하면 복약 경고를 다시 확인합니다.</p>
-              ) : result.drugWarnings.length === 0 ? (
-                <div className="p-3 bg-emerald-950/40 border border-emerald-800 rounded-lg text-xs text-emerald-300">
-                  이번 분석에서 반환된 상호작용 경고가 없습니다.
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {result.drugWarnings.map((alert, idx) => (
-                    <div
-                      key={idx}
-                      className={`p-3.5 rounded-lg border text-xs space-y-1.5 ${
-                        alert.riskLevel === 'DANGER'
-                          ? 'bg-rose-950/50 border-rose-800 text-rose-200'
-                          : 'bg-amber-950/50 border-amber-800 text-amber-200'
-                      }`}
-                    >
-                      <div className="flex justify-between items-center font-bold">
-                        <span className="text-sm">{alert.warningTitle}</span>
-                        <span className="px-2 py-0.5 rounded font-mono text-[10px] bg-black/40 border border-current">
-                          {alert.riskLevel}
-                        </span>
-                      </div>
-                      <p className="leading-relaxed opacity-90">{alert.warningMessage}</p>
-                      <div className="pt-1.5 border-t border-white/10 text-[11px] text-slate-300">
-                        <span className="font-semibold text-white">임상 권고: </span>
-                        {alert.actionGuide}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
         </section>
 
         {/* 우측: Three.js 3D 체적 복원 및 지표 카드 */}

@@ -57,7 +57,6 @@ function renderResult(result) {
 async function main() {
   const { html, boxes } = renderResult(fixture.data);
   assert.ok(html.includes('백미밥'));
-  assert.ok(html.includes(fixture.data.drugWarnings[0].warningTitle));
   assert.ok(html.includes('320.5'));
   const bbox = fixture.data.foodItems[0].bbox2d;
   const expected = [bbox.xmin * 640, bbox.ymin * 480,
@@ -69,7 +68,6 @@ async function main() {
   assert.ok(uncertain.html.includes('음식 확인 필요'));
 
   const empty = renderResult({ ...fixture.data, foodItems: [], drugWarnings: [] });
-  assert.ok(empty.html.includes('이번 분석에서 반환된 상호작용 경고가 없습니다.'));
   assert.equal(empty.boxes.length, 0);
   assert.ok(renderResult(null).html.includes('식단 이미지 업로드'));
   assert.ok(renderResult(null).html.includes('total-caloriesKcal'));
