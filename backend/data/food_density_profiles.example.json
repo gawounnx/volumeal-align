@@ -1,0 +1,9 @@
+[
+  {
+    "foodId": "FOOD_RICE_001",
+    "densityGCm3": 0.8,
+    "densityStd": 0.08,
+    "preparation": "cooked",
+    "source": "replace-with-validated-source"
+  }
+]

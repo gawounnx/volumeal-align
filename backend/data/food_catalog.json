@@ -1,0 +1,56 @@
+[
+  {
+    "foodId": "white_rice",
+    "canonicalName": "쌀밥",
+    "aliases": ["밥", "백미밥", "공기밥"],
+    "interactionTags": []
+  },
+  {
+    "foodId": "spinach_namul",
+    "canonicalName": "시금치나물",
+    "aliases": ["시금치무침", "시금치"],
+    "interactionTags": ["vitamin_k", "시금치"]
+  },
+  {
+    "foodId": "kimchi_stew",
+    "canonicalName": "김치찌개",
+    "aliases": ["김치국", "돼지고기김치찌개"],
+    "interactionTags": []
+  },
+  {
+    "foodId": "soybean_paste_stew",
+    "canonicalName": "된장찌개",
+    "aliases": ["된장국", "토장국"],
+    "interactionTags": []
+  },
+  {
+    "foodId": "bulgogi",
+    "canonicalName": "소불고기",
+    "aliases": ["불고기", "뚝배기불고기", "소고기불고기"],
+    "interactionTags": []
+  },
+  {
+    "foodId": "grilled_salmon",
+    "canonicalName": "연어구이",
+    "aliases": ["구운연어", "연어스테이크"],
+    "interactionTags": []
+  },
+  {
+    "foodId": "banana",
+    "canonicalName": "바나나",
+    "aliases": ["생바나나"],
+    "interactionTags": []
+  },
+  {
+    "foodId": "apple",
+    "canonicalName": "사과",
+    "aliases": ["생사과", "부사", "아오리", "사과조각"],
+    "interactionTags": ["apple", "사과"]
+  },
+  {
+    "foodId": "boiled_egg",
+    "canonicalName": "삶은달걀",
+    "aliases": ["완숙달걀", "삶은계란", "계란"],
+    "interactionTags": ["calcium_high"]
+  }
+]

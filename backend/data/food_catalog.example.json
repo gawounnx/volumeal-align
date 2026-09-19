@@ -1,0 +1,8 @@
+[
+  {
+    "foodId": "FOOD_RICE_001",
+    "canonicalName": "백미밥",
+    "aliases": ["쌀밥", "흰쌀밥", "공깃밥"],
+    "interactionTags": []
+  }
+]

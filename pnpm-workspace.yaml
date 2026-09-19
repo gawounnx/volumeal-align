@@ -1,0 +1,7 @@
+packages:
+  - 'packages/*'
+  - 'frontend'
+allowBuilds:
+  msw: true
+onlyBuiltDependencies:
+  - msw

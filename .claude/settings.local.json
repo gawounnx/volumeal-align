@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(pkill -f \"uvicorn src.main:app\")",
+      "Bash(pkill -f \"next dev\")"
+    ]
+  }
+}

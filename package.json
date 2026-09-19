@@ -1,0 +1,8 @@
+{
+  "name": "volumeal-align-monorepo",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "build": "pnpm --filter @volumeal/contracts build && pnpm --filter frontend build"
+  }
+}

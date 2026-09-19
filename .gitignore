@@ -1,0 +1,28 @@
+
+.env
+.env.*
+!.env.example
+node_modules/
+.pnpm-store/
+.next/
+__pycache__/
+.pytest_cache/
+*.log
+frontend/test-results/
+frontend/playwright-report/
+backend/static/uploads/
+*.tar
+*.tar.gz
+aihub_data/
+aihub_extracted/
+
+# Training inputs and artifacts are not required by the deployed API.
+backend/data/kfood/images/
+backend/data/kfood/labels/
+backend/data/source/
+backend/yolov8x-seg.pt
+backend/weights/
+*.onnx
+
+# Local upload package; source files are committed separately.
+/volumeal-align-github-upload.tar.gz

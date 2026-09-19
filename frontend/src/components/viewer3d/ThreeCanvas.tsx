@@ -1,0 +1,1 @@
+'use client';import PointCloudViewer from './PointCloudViewer';import type {FoodItemEstimation,SparsePointCloudPayload} from '../../types/vision';export default function ThreeCanvas(p:{items?:FoodItemEstimation[];pointCloud?:SparsePointCloudPayload;height?:number}){return <PointCloudViewer items={p.items||[]} pointCloud={p.pointCloud} height={p.height}/>}

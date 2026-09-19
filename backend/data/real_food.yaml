@@ -1,0 +1,11 @@
+path: /workspace/backend/data/real_food
+train: images/train
+val: images/val
+test: images/test
+names:
+  0: white_rice
+  1: spinach_namul
+  2: kimchi_stew
+  3: bulgogi
+  4: banana
+  5: apple

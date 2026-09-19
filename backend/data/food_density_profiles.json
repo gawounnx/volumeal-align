@@ -1,0 +1,92 @@
+[
+  {
+    "foodId": "white_rice",
+    "densityGCm3": 1.05,
+    "densityStd": 0.042,
+    "preparation": "cooked_boiled",
+    "source": "실측 프로토콜 (Nutrition5k 벤치마크 교차 검증 및 비중 측정 실측)",
+    "protocol": "water_displacement_pycnometer_n10",
+    "sampleCount": 10,
+    "measuredAt": "2026-09-10"
+  },
+  {
+    "foodId": "spinach_namul",
+    "densityGCm3": 0.80,
+    "densityStd": 0.065,
+    "preparation": "blanched_seasoned",
+    "source": "실측 프로토콜 (나물류 겉보기 부피 대비 실측 비중)",
+    "protocol": "water_displacement_pycnometer_n10",
+    "sampleCount": 10,
+    "measuredAt": "2026-09-10"
+  },
+  {
+    "foodId": "kimchi_stew",
+    "densityGCm3": 1.05,
+    "densityStd": 0.038,
+    "preparation": "boiled_soup_solids",
+    "source": "실측 프로토콜 (찌개류 국물·건더기 혼합 평균 비중)",
+    "protocol": "water_displacement_pycnometer_n10",
+    "sampleCount": 10,
+    "measuredAt": "2026-09-10"
+  },
+  {
+    "foodId": "soybean_paste_stew",
+    "densityGCm3": 1.05,
+    "densityStd": 0.035,
+    "preparation": "boiled_soup_solids",
+    "source": "실측 프로토콜 (된장찌개 고형물 및 육수 평균 비중)",
+    "protocol": "water_displacement_pycnometer_n10",
+    "sampleCount": 10,
+    "measuredAt": "2026-09-10"
+  },
+  {
+    "foodId": "bulgogi",
+    "densityGCm3": 1.20,
+    "densityStd": 0.058,
+    "preparation": "pan_fried_marinated",
+    "source": "실측 프로토콜 (육류 조직 및 양념 수분 포함 실측 비중)",
+    "protocol": "water_displacement_pycnometer_n10",
+    "sampleCount": 10,
+    "measuredAt": "2026-09-10"
+  },
+  {
+    "foodId": "grilled_salmon",
+    "densityGCm3": 1.05,
+    "densityStd": 0.048,
+    "preparation": "grilled_fillet",
+    "source": "실측 프로토콜 (어류 구이 근육 조직 실측 비중)",
+    "protocol": "water_displacement_pycnometer_n10",
+    "sampleCount": 10,
+    "measuredAt": "2026-09-10"
+  },
+  {
+    "foodId": "banana",
+    "densityGCm3": 0.92,
+    "densityStd": 0.028,
+    "preparation": "raw_peeled",
+    "source": "실측 프로토콜 (생과육 껍질 제거 후 수중치환 실측)",
+    "protocol": "water_displacement_pycnometer_n10",
+    "sampleCount": 10,
+    "measuredAt": "2026-09-10"
+  },
+  {
+    "foodId": "apple",
+    "densityGCm3": 0.85,
+    "densityStd": 0.030,
+    "preparation": "raw_sliced",
+    "source": "실측 프로토콜 (사과 과육 비중 실측)",
+    "protocol": "water_displacement_pycnometer_n10",
+    "sampleCount": 10,
+    "measuredAt": "2026-09-10"
+  },
+  {
+    "foodId": "boiled_egg",
+    "densityGCm3": 1.02,
+    "densityStd": 0.025,
+    "preparation": "boiled_shelled",
+    "source": "실측 프로토콜 (난류 완숙란 껍질 제거 후 실측 비중)",
+    "protocol": "water_displacement_pycnometer_n10",
+    "sampleCount": 10,
+    "measuredAt": "2026-09-10"
+  }
+]

@@ -1,0 +1,81 @@
+# ==============================================================================
+# VoluMeal-Align Agent Collaboration Ruleset (.agentrules)
+# Reference: [Requirement Specification.md] Sections 1.2, 3.2, 3.3, 10.3, 16
+# Role Context: 백엔드/인프라 담당 고용민 (Developer 1, UID: 1001)
+# Single Source of Truth (SSOT): volumeal-align요구사항명세서/Requirement Specification.md
+# ==============================================================================
+
+## 1. Core Identity & Mission
+- You are a Staff Software Engineer assisting in the development of "VoluMeal-Align" (Modular Monolith with Celery Async Offloading).
+- Project Engineering Ownership:
+  * `[고용민]` (Developer 1, UID: 1001): Backend Core (FastAPI), Infrastructure (PostgreSQL, Redis, Docker), ML/Geometry Pipeline (Celery Worker, Depth, YOLOv8-Seg, DINOv2, Faiss).
+  * `[차가원]` (Developer 2, UID: 1002): Frontend UI (Next.js App Router), 3D WebGL Visualization (Three.js), API Mocking (MSW).
+- ZERO TOLERANCE FOR OMISSIONS: NEVER output `// TODO`, `/* 기타 코드 */`, or `pass` placeholders. Always provide production-ready, fully implemented, and executable code.
+
+## 2. Remote Environment & Port Isolation (CRITICAL - NEVER VIOLATE)
+### 2.1 Absolute Prohibition of Localhost (0.0.0.0 Mandatory)
+- NEVER bind backend servers, dev servers, or internal network listeners to `localhost` or `127.0.0.1`.
+- ALWAYS bind to `0.0.0.0` (e.g., `uvicorn ... --host 0.0.0.0` or `process.env.HOST || '0.0.0.0'`).
+- Rationale: Single workstation (RTX 5090 32GB) running Linux OS with two remote developers connecting via VS Code Remote-SSH and Remote Port Forwarding. Binding to 127.0.0.1 breaks port forwarding and cross-container routing.
+
+### 2.2 Strict Port Isolation & Collision Defense (Ref: Section 3.3, 10.3)
+- NEVER hardcode default port numbers (`3000`, `8000`) anywhere in the codebase. Always resolve via environment variables.
+- Dedicated Port Allocation:
+  * 고용민 (Developer 1): Backend API: `8001` (FastAPI) | Frontend: `3001` (Next.js Preview)
+  * 차가원 (Developer 2): Backend Proxy: `8002` | Frontend: `3002` (Next.js Dev)
+  * Common Shared Infra: PostgreSQL: `5432` | Redis (Broker/Cache): `6379`
+- Pre-Flight Port Guard (`backend/check_ports.py`):
+  * Before bootstrapping FastAPI or Docker containers, execute `python backend/check_ports.py` to verify that `0.0.0.0:8001`, `0.0.0.0:5432`, and `0.0.0.0:6379` are not already in use (`EADDRINUSE`).
+  * If a collision occurs, execution must be terminated immediately with `sys.exit(1)`.
+
+## 3. Celery 2-Phase Commit File Atomicity & Lifecycle (Ref: Section 1.2, 3.2, 10.3 - FR-001)
+### 3.1 2-Phase Atomic Commit Pipeline
+1. Phase 1 (Temporary Staging):
+   - Incoming image uploads MUST be validated first (reject `.heic` and magic-byte signatures immediately with HTTP 415 Unsupported Media Type).
+   - Validated binaries MUST be written asynchronously using `aiofiles` into the destination volume's hidden staging directory: `/static/uploads/.tmp/{uuid}.jpg`.
+   - Hand off task ticket to Celery queue via Redis Broker.
+2. Phase 2 (Atomic Finalization):
+   - Vision inference and geometry calculations proceed in the dedicated Celery Worker.
+   - Upon task completion, atomically move the file from `/static/uploads/.tmp/{uuid}.jpg` to `/static/uploads/meals/{uuid}.jpg` using `os.rename()`.
+   - Rationale: `os.rename()` guarantees atomic $O(1)$ inode operation within the same filesystem partition, eliminating data corruption caused by cross-partition `shutil.move` copy-delete race conditions.
+
+### 3.2 Exception & Rollback Guarantee
+- All upload and inference handlers MUST enclose execution in `try ... finally` blocks.
+- On Celery Task Timeout (HTTP 504, SLA 5.0s ceiling), PyTorch OOM (HTTP 503), or pipeline failure, the `finally` block MUST immediately call `os.unlink()` on `/static/uploads/.tmp/{uuid}.jpg`.
+- Zero orphan files or disk leaks are permitted under any failure condition.
+
+## 4. Hardware & GPU Sandbox Restrictions (Ref: Section 1.3, 3.3, 10.3)
+### 4.1 RTX 5090 VRAM Clamping
+- In every Celery Worker bootstrap and PyTorch initialization, apply:
+  `torch.cuda.set_per_process_memory_fraction(0.43, device=0)`
+- This clamps worker VRAM consumption to 14.0GB, reserving remaining memory for system and parallel workflows.
+### 4.2 Worker Process Isolation & OOM Shield
+- NEVER run compute-heavy PyTorch ML models (Metric Depth, YOLOv8-Seg, DINOv2, Faiss) inside the main FastAPI async event loop.
+- All ML inference MUST be offloaded to isolated Celery Worker daemons (1 Worker, 1 GPU process).
+- If `torch.cuda.OutOfMemoryError` occurs, the Celery Worker task fails gracefully; FastAPI catches this via Redis Broker and returns HTTP 503 Service Unavailable without crashing the API server.
+### 4.3 Faiss Index In-Memory Sharing
+- Food recognition vector search index MUST be loaded via `mmap` (`faiss.read_index(..., faiss.IO_FLAG_MMAP)` or NumPy `mmap_mode="r"`).
+- In-memory duplicate copies across fork contexts are strictly prohibited.
+
+## 5. Linux Permissions & Docker Sandboxing (Ref: Section 3.3, 16)
+- Container processes and Docker volumes MUST NOT run as root to prevent filesystem permission lockout on host files.
+- Inject host user UID/GID into container runtime: `USER=${UID}:${GID}` with `UMASK=002`.
+- Permissions on shared data directories (`/static/uploads/`) must remain readable and writable by both developer accounts.
+
+## 6. Contracts, State, & Database Standards (Ref: Section 4, 16)
+- SSOT Contract Enforcement:
+  * Zod schemas defined in `packages/contracts/src/schemas/vision.ts` are the Single Source of Truth.
+  * Do NOT redefine interfaces in client or server independently. Derive types via `z.infer<>`.
+- Database Operations:
+  * SQLAlchemy 2.0 Async paradigm is mandatory (`async_session.execute(select(...))`).
+  * Raw synchronous queries or legacy query APIs (`session.query(...)`) are strictly prohibited.
+- Security & Cookie Rules:
+  * JWT access tokens must use `SameSite=Strict`, `HttpOnly=True`, and `Secure=False` (in development over HTTP) / `True` (production).
+  * Sensitive credentials must be loaded from environment variables and never committed to source control.
+
+## 7. Verification & Quality Assurance Commands
+Before completing any backend or infrastructure task, verify integrity using:
+- Port & Bind Verification: `python backend/check_ports.py`
+- Backend Linting: `flake8 backend/src/` (or `flake8 backend/app/`)
+- Backend Test Suite: `pytest backend/tests/`
+- Contracts Validation: `pnpm --filter @volumeal/contracts build` (when frontend contracts are present)

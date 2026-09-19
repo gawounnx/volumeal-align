@@ -1,0 +1,106 @@
+# ==============================================================================
+# VoluMeal-Align Shared Infrastructure & Celery Worker Docker Compose
+# Reference: volumeal-align요구사항명세서/Volumeal Requirement.md Sections 1.4, 3.3, 13.3, 14
+# Ownership: 백엔드/인프라 담당 [고용민] (Developer 1, UID: 1001)
+# ==============================================================================
+
+services:
+  # ----------------------------------------------------------------------------
+  # Shared Relational Database (PostgreSQL 15)
+  # Port: 5432 (Default shared infrastructure)
+  # ----------------------------------------------------------------------------
+  postgres:
+    image: postgres:15-alpine
+    container_name: volumeal-postgres
+    restart: unless-stopped
+    ports:
+      - "0.0.0.0:${POSTGRES_PORT:-5432}:5432"
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-voluuser}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-volupassword}
+      POSTGRES_DB: ${POSTGRES_DB:-volumeal}
+      UMASK: "002"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-voluuser} -d ${POSTGRES_DB:-volumeal}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      volumeal-network:
+        aliases:
+          - db
+          - postgres
+
+  # ----------------------------------------------------------------------------
+  # Shared Task Broker & Cache (Redis 7)
+  # Port: 6379 (Default shared infrastructure)
+  # ----------------------------------------------------------------------------
+  redis:
+    image: redis:7-alpine
+    container_name: volumeal-redis
+    restart: unless-stopped
+    ports:
+      - "0.0.0.0:${REDIS_PORT:-6379}:6379"
+    command: redis-server --appendonly yes
+    environment:
+      UMASK: "002"
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - volumeal-network
+
+  # ----------------------------------------------------------------------------
+  # Goyongmin Dedicated Celery Worker (GPU Inference Pipeline & 2-Phase Commit)
+  # 1 Worker : 1 GPU Process, VRAM Clamp: 14GB
+  # ----------------------------------------------------------------------------
+  celery-worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: volumeal-celery-worker
+    command: celery -A app.worker.celery_app worker --loglevel=info --concurrency=1
+    user: "${UID:-1000}:${GID:-1000}" # Linux 호스트 파일 권한 꼬임(root 소유) 방지
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      - UMASK=002
+      - ENV=development
+      - HOST=0.0.0.0
+      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-voluuser}:${POSTGRES_PASSWORD:-volupassword}@db:5432/${POSTGRES_DB:-volumeal}
+      - REDIS_URL=redis://redis:6379/0
+      - CUDA_VISIBLE_DEVICES=0
+      - GPU_VRAM_LIMIT_GB=14.0
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY:-e9a8b7c6d5e4f3g2h1}
+    volumes:
+      - ./backend/static/uploads:/workspace/backend/static/uploads
+      - ./backend/static/uploads:/backend/static/uploads
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    networks:
+      - volumeal-network
+
+volumes:
+  pgdata:
+    driver: local
+  redisdata:
+    driver: local
+
+networks:
+  volumeal-network:
+    driver: bridge

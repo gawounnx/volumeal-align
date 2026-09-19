@@ -1,0 +1,154 @@
+{
+  "success": true,
+  "data": {
+    "mealId": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
+    "isPersisted": true,
+    "requiresConfirmation": false,
+    "imageUrl": "https://storage.volumeal.io/meals/2026/09/09/sample_meal.jpg",
+    "isCalibrated": true,
+    "focalLengthMm": 26.0,
+    "groundPlane": {
+      "a": 0.012,
+      "b": -0.998,
+      "c": 0.054,
+      "d": 0.452
+    },
+    "totalNutrition": {
+      "caloriesKcal": 542.5,
+      "carbsG": 72.3,
+      "proteinG": 34.2,
+      "fatG": 12.8,
+      "sodiumMg": 640.0
+    },
+    "foodItems": [
+      {
+        "id": "e1a2b3c4-0001-4000-8000-000000000001",
+        "foodId": "FOOD_RICE_001",
+        "foodName": "백미밥",
+        "confidenceScore": 0.942,
+        "classificationConfidence": 0.91,
+        "geometryConfidence": 0.86,
+        "requiresConfirmation": false,
+        "topCandidates": [
+          {"foodId": "FOOD_RICE_001", "foodName": "백미밥", "score": 0.91},
+          {"foodId": "FOOD_PORRIDGE_001", "foodName": "쌀죽", "score": 0.73}
+        ],
+        "volumeCm3": 210.5,
+        "densityGCm3": 1.05,
+        "weightG": 221.03,
+        "caloriesKcal": 320.5,
+        "carbsG": 68.5,
+        "proteinG": 6.2,
+        "fatG": 0.8,
+        "sodiumMg": 4.5,
+        "bbox2d": {
+          "ymin": 0.45,
+          "xmin": 0.12,
+          "ymax": 0.78,
+          "xmax": 0.45
+        },
+        "bbox3d": {
+          "center": {
+            "x": -0.15,
+            "y": -0.05,
+            "z": 0.52
+          },
+          "dimensions": {
+            "x": 0.12,
+            "y": 0.06,
+            "z": 0.12
+          },
+          "rotations": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0
+          },
+          "vertices": [
+            {
+              "x": -0.21,
+              "y": -0.08,
+              "z": 0.46
+            },
+            {
+              "x": -0.09,
+              "y": -0.08,
+              "z": 0.46
+            },
+            {
+              "x": -0.09,
+              "y": -0.02,
+              "z": 0.46
+            },
+            {
+              "x": -0.21,
+              "y": -0.02,
+              "z": 0.46
+            },
+            {
+              "x": -0.21,
+              "y": -0.08,
+              "z": 0.58
+            },
+            {
+              "x": -0.09,
+              "y": -0.08,
+              "z": 0.58
+            },
+            {
+              "x": -0.09,
+              "y": -0.02,
+              "z": 0.58
+            },
+            {
+              "x": -0.21,
+              "y": -0.02,
+              "z": 0.58
+            }
+          ]
+        }
+      }
+    ],
+    "drugWarnings": [
+      {
+        "id": "w1a2b3c4-0001-4000-8000-000000000001",
+        "drugBrandName": "쿠마딘정5밀리그람",
+        "drugIngredient": "와파린나트륨 (Warfarin Sodium)",
+        "triggerNutrientOrFood": "시금치나물 (Vitamin_K)",
+        "riskLevel": "DANGER",
+        "detectedVia": "VISUAL_GROUNDING",
+        "warningTitle": "와파린 약효 저하 위험 성분 감지",
+        "warningMessage": "식탁에서 식별된 처방약(쿠마딘정)과 고비타민K 반찬(시금치나물) 간의 대사 간섭이 발생합니다.",
+        "actionGuide": "비타민 K 섭취가 급증하면 혈전 예방 작용이 길항됩니다. 섭취량을 최소화하거나 담당 의료진과 상의하십시오."
+      }
+    ],
+    "visualization3d": {
+      "pointCloud": {
+        "count": 3,
+        "positions": [
+          -0.15,
+          -0.05,
+          0.52,
+          -0.14,
+          -0.04,
+          0.51,
+          -0.16,
+          -0.05,
+          0.53
+        ],
+        "colors": [
+          0.85,
+          0.82,
+          0.78,
+          0.86,
+          0.83,
+          0.79,
+          0.84,
+          0.81,
+          0.77
+        ]
+      }
+    },
+    "processedAt": "2026-09-09T11:42:00.123Z",
+    "inferenceLatencyMs": 284
+  }
+}

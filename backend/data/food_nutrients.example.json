@@ -1,0 +1,13 @@
+[
+  {
+    "foodId": "FOOD_RICE_001",
+    "basisWeightG": 100,
+    "caloriesKcal": 130,
+    "carbsG": 28.6,
+    "proteinG": 2.4,
+    "fatG": 0.3,
+    "sodiumMg": 1,
+    "sourceFoodCode": "replace-with-source-food-code",
+    "sourceVersion": "replace-with-source-version"
+  }
+]

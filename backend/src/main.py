@@ -1,0 +1,213 @@
+from datetime import datetime, timezone
+import logging
+from pathlib import Path
+from typing import Any, List, Optional
+from fastapi import FastAPI, Request
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from fastapi.exceptions import RequestValidationError
+from starlette.exceptions import HTTPException as StarletteHTTPException
+from sqlalchemy.exc import SQLAlchemyError
+
+from src.core.config import settings
+from src.core.exceptions import AppException
+from src.api.v1.endpoints.vision import router as vision_router, get_pipeline
+from src.api.v1.endpoints.meals import router as meals_router
+from src.api.v1.endpoints.auth import router as auth_router
+
+logger = logging.getLogger(__name__)
+
+app = FastAPI(title="VoluMeal-Align Vision API", version="1.0.0")
+
+# Ref: [Section 9.1] 고용민 FE (0.0.0.0:3001) 및 차가원 FE (0.0.0.0:3002) 자격 증명(withCredentials) 허용 CORS 설정
+allowed_origins: List[str] = [
+    "http://0.0.0.0:3001",
+    "http://0.0.0.0:3002",
+    "http://localhost:3001",
+    "http://localhost:3002",
+    "http://127.0.0.1:3001",
+    "http://127.0.0.1:3002",
+]
+if isinstance(settings.CORS_ORIGINS, list):
+    for o in settings.CORS_ORIGINS:
+        if o not in allowed_origins:
+            allowed_origins.append(o)
+elif isinstance(settings.CORS_ORIGINS, str) and settings.CORS_ORIGINS:
+    if settings.CORS_ORIGINS not in allowed_origins:
+        allowed_origins.append(settings.CORS_ORIGINS)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=allowed_origins,
+    allow_credentials=True,
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type", "Cookie", "X-Requested-With", "Accept"],
+)
+
+for router in (vision_router, meals_router, auth_router):
+    app.include_router(router, prefix="/api/v1")
+
+
+HTTP_STATUS_TO_ERROR_CODE = {
+    400: "ERR_INVALID_PAYLOAD",
+    401: "ERR_UNAUTHORIZED",
+    403: "ERR_ACCESS_DENIED",
+    404: "ERR_NOT_FOUND",
+    405: "ERR_METHOD_NOT_ALLOWED",
+    409: "ERR_CONFLICT",
+    415: "ERR_HEIC_UNSUPPORTED",
+    422: "ERR_UNPROCESSABLE_ENTITY",
+    429: "ERR_RATE_LIMIT",
+    500: "ERR_INTERNAL_SERVER_ERROR",
+    502: "ERR_BAD_GATEWAY",
+    503: "ERR_SERVICE_UNAVAILABLE",
+    504: "ERR_CELERY_TIMEOUT",
+}
+
+
+def make_error_response(
+    status_code: int,
+    code: str,
+    message: str,
+    path: str,
+    details: Optional[List[Any]] = None,
+    headers: Optional[dict] = None,
+) -> JSONResponse:
+    """[NFR 10.1] 전역 표준 에러 응답 규격 JSONResponse 생성 팩토리 함수."""
+    timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
+    content = {
+        "success": False,
+        "error": {
+            "code": code,
+            "message": message,
+            "timestamp": timestamp,
+            "path": path,
+            "details": details if details is not None else [],
+        },
+        "detail": message,  # 하위 호환성 유지
+    }
+    return JSONResponse(status_code=status_code, content=content, headers=headers)
+
+
+@app.exception_handler(AppException)
+async def domain_error(request: Request, exc: AppException):
+    """[NFR 10.1, Section 10.2] 비즈니스 도메인 AppException 표준 핸들러."""
+    code = getattr(exc, "code", None)
+    message = getattr(exc, "message", None)
+    details = getattr(exc, "details", None)
+
+    if not code and isinstance(exc.detail, dict):
+        err_info = exc.detail.get("error", exc.detail)
+        code = err_info.get("code")
+        message = err_info.get("message")
+        details = err_info.get("details")
+
+    code = code or HTTP_STATUS_TO_ERROR_CODE.get(exc.status_code, f"ERR_{exc.status_code}")
+    message = message or (str(exc.detail) if not isinstance(exc.detail, dict) else "도메인 오류가 발생했습니다.")
+    details = details or []
+
+    return make_error_response(
+        status_code=exc.status_code,
+        code=code,
+        message=message,
+        path=request.url.path,
+        details=details,
+        headers=getattr(exc, "headers", None),
+    )
+
+
+@app.exception_handler(StarletteHTTPException)
+async def http_exception_handler(request: Request, exc: StarletteHTTPException):
+    """[NFR 10.1] FastAPI 및 Starlette HTTPException 표준 에러 변환기."""
+    if isinstance(exc, AppException):
+        return await domain_error(request, exc)
+
+    code = None
+    message = None
+    details = []
+
+    if isinstance(exc.detail, dict):
+        err_info = exc.detail.get("error", exc.detail)
+        code = err_info.get("code")
+        message = err_info.get("message")
+        details = err_info.get("details", [])
+    elif isinstance(exc.detail, str):
+        message = exc.detail
+        if exc.status_code == 401 and "만료" in message:
+            code = "ERR_TOKEN_EXPIRED"
+
+    code = code or HTTP_STATUS_TO_ERROR_CODE.get(exc.status_code, f"ERR_{exc.status_code}")
+    message = message or "요청을 처리하는 중 오류가 발생했습니다."
+
+    return make_error_response(
+        status_code=exc.status_code,
+        code=code,
+        message=message,
+        path=request.url.path,
+        details=details,
+        headers=getattr(exc, "headers", None),
+    )
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_error(request: Request, exc: RequestValidationError):
+    """[NFR 10.1, Section 10.2] Pydantic 요청 페이로드 검증 실패 표준 핸들러."""
+    errors = []
+    for err in exc.errors():
+        field = ".".join(str(loc) for loc in err.get("loc", []))
+        msg = err.get("msg", "입력값이 올바르지 않습니다.")
+        errors.append({"field": field, "issue": msg})
+
+    return make_error_response(
+        status_code=422,
+        code="ERR_INVALID_INPUT",
+        message="입력값의 형식 또는 범위를 확인해 주세요.",
+        path=request.url.path,
+        details=errors,
+    )
+
+
+@app.exception_handler(SQLAlchemyError)
+async def database_error(request: Request, exc: SQLAlchemyError):
+    """[NFR 10.1] 데이터베이스 연동 실패 표준 에러 핸들러."""
+    logger.error("Database request failed: %s", type(exc).__name__)
+    return make_error_response(
+        status_code=503,
+        code="ERR_DATABASE_UNAVAILABLE",
+        message="데이터베이스 작업을 완료할 수 없습니다. 잠시 후 다시 시도해 주세요.",
+        path=request.url.path,
+        details=[],
+    )
+
+
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception):
+    """[NFR 10.1] 서버 미처리 예외에 대한 안전망 500 에러 핸들러."""
+    logger.error("Unhandled server exception: %s", str(exc), exc_info=True)
+    return make_error_response(
+        status_code=500,
+        code="ERR_INTERNAL_SERVER_ERROR",
+        message="서버 내부 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.",
+        path=request.url.path,
+        details=[],
+    )
+
+
+@app.get("/api/v1/health")
+def health():
+    providers = []
+    if settings.FOOD_RECOGNITION_PROVIDER == "local" and get_pipeline.cache_info().currsize:
+        providers = get_pipeline().segmentor.session.get_providers()
+    food_data_paths = (settings.FOOD_CATALOG_PATH, settings.FOOD_DENSITY_PATH, settings.FOOD_NUTRIENTS_PATH)
+    return {
+        "inferenceProviders": providers,
+        "modelLoaded": bool(providers),
+        "foodRecognitionProvider": settings.FOOD_RECOGNITION_PROVIDER,
+        "externalFoodRecognitionConfigured": bool(
+            settings.LOGMEAL_API_TOKEN and settings.LOGMEAL_API_BASE_URL.startswith("https://")
+        ),
+        "metricDepthConfigured": settings.DEPTH_MODEL_IS_METRIC and Path(settings.ONNX_DEPTH_MODEL_PATH).is_file(),
+        "foodRecognitionConfigured": Path(settings.FOOD_EMBEDDING_MODEL_PATH).is_file()
+        and Path(settings.FOOD_EMBEDDING_INDEX_PATH).is_file(),
+        "nutritionConfigured": all(Path(path).is_file() for path in food_data_paths),
+    }

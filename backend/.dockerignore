@@ -1,0 +1,10 @@
+.env
+.env.*
+__pycache__/
+.pytest_cache/
+tests/
+scripts/
+data/kfood/images/
+data/kfood/labels/
+data/source/
+*.pyc
